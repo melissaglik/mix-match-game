@@ -177,14 +177,45 @@
             };
 
             const calculateScore = () => {
-                let correct = 0;
-                Object.keys(correctAnswers).forEach(row => {
-                    if (placements[row] === correctAnswers[row]) {
-                        correct++;
-                    }
-                });
-                return Math.round((correct / 14) * 100);
-            };
+    let correct = 0;
+    
+    // Esnek gruplar: bu pozisyonlarda sıralama önemli değil
+    const flexibleGroups = [
+        [2, 3],           // Turnover Gross, Sales Deductions
+        [5, 6, 7],        // Var. Factory Costs, Var. Costs Sales, Var. Cost Logistic
+        [9, 10, 11, 12, 13]  // Fixed Factory Costs, SG&A local regional, Development, SG&A Global, Due Date Effects
+    ];
+    
+    const checkedPositions = new Set();
+    
+    // Esnek grupları kontrol et
+    flexibleGroups.forEach(group => {
+        const groupAnswers = group.map(pos => correctAnswers[pos]);
+        const groupPlacements = group.map(pos => placements[pos]);
+        
+        // Gruptaki her doğru cevap için
+        groupAnswers.forEach(answer => {
+            if (groupPlacements.includes(answer)) {
+                correct++;
+            }
+        });
+        
+        // Bu pozisyonları işaretledik
+        group.forEach(pos => checkedPositions.add(pos));
+    });
+    
+    // Sabit pozisyonları kontrol et (1, 4, 8, 14)
+    Object.keys(correctAnswers).forEach(row => {
+        const rowNum = parseInt(row);
+        if (!checkedPositions.has(rowNum)) {
+            if (placements[row] === correctAnswers[row]) {
+                correct++;
+            }
+        }
+    });
+    
+    return Math.round((correct / 14) * 100);
+};
 
             const handleSubmit = async () => {
                 const finalScore = calculateScore();
