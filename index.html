@@ -19,6 +19,15 @@
             opacity: 0.5;
             transform: scale(0.95);
         }
+        .items-container {
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+        @media (min-width: 768px) {
+            .items-container {
+                max-height: none;
+            }
+        }
     </style>
 </head>
 <body>
@@ -63,22 +72,27 @@
             const [showLeaderboard, setShowLeaderboard] = useState(false);
             const [touchStartY, setTouchStartY] = useState(null);
             const [ghostElement, setGhostElement] = useState(null);
+            const [showAdminPanel, setShowAdminPanel] = useState(false);
+            const [adminPassword, setAdminPassword] = useState('');
+            const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
+            
+            const ADMIN_PASSWORD = 'admin123'; // Şifreyi istediğin gibi değiştirebilirsin
 
             const correctAnswers = {
-                1: 'Sales Quantity',
-                2: 'Turnover Gross',
-                3: 'Sales Deductions',
-                4: 'Turnover Net',
-                5: 'Var. Factory Costs',
-                6: 'Var. Costs Sales',
-                7: 'Var. Cost Logistic',
-                8: 'Contribution Margin I',
-                9: 'Fixed Factory Costs',
-                10: 'SG&A local regional',
-                11: 'Development',
-                12: 'SG&A Global',
-                13: 'Due Date Effects',
-                14: 'EBIT'
+                1: 'Turnover Gross',
+                2: 'Var. Costs Sales',
+                3: 'Var. Cost Logistic',
+                4: 'Var. Factory Costs',
+                5: 'Contribution Margin I',
+                6: 'Fixed Factory Costs',
+                7: 'Development',
+                8: 'Sales Deductions',
+                9: 'SG&A local regional',
+                10: 'SG&A Global',
+                11: 'EBIT',
+                12: 'Due Date Effects',
+                13: 'Sales Quantity',
+                14: 'Turnover Net'
             };
 
             const items = [
@@ -131,7 +145,6 @@
                 }
             };
 
-            // Desktop drag handlers
             const handleDragStart = (item) => {
                 setDraggedItem(item);
             };
@@ -147,7 +160,6 @@
                 e.preventDefault();
             };
 
-            // Mobile touch handlers
             const handleTouchStart = (e, item) => {
                 if (submitted) return;
                 e.preventDefault();
@@ -177,96 +189,33 @@
             };
 
             const calculateScore = () => {
-    let correct = 0;
-    
-    // Esnek gruplar: bu pozisyonlarda sıralama önemli değil
-    const flexibleGroups = [
-        [2, 3],           // Turnover Gross, Sales Deductions
-        [5, 6, 7],        // Var. Factory Costs, Var. Costs Sales, Var. Cost Logistic
-        [9, 10, 11, 12, 13]  // Fixed Factory Costs, SG&A local regional, Development, SG&A Global, Due Date Effects
-    ];
-    
-    const checkedPositions = new Set();
-    
-    // Esnek grupları kontrol et
-    flexibleGroups.forEach(group => {
-        const groupAnswers = group.map(pos => correctAnswers[pos]);
-        const groupPlacements = group.map(pos => placements[pos]);
-        
-        // Gruptaki her doğru cevap için
-        groupAnswers.forEach(answer => {
-            if (groupPlacements.includes(answer)) {
-                correct++;
-            }
-        });
-        
-        // Bu pozisyonları işaretledik
-        group.forEach(pos => checkedPositions.add(pos));
-    });
-    
-    // Sabit pozisyonları kontrol et (1, 4, 8, 14)
-    Object.keys(correctAnswers).forEach(row => {
-        const rowNum = parseInt(row);
-        if (!checkedPositions.has(rowNum)) {
-            if (placements[row] === correctAnswers[row]) {
-                correct++;
-            }
-        }
-    });
-    
-    return Math.round((correct / 14) * 100);
-};
+                let correct = 0;
+                Object.keys(correctAnswers).forEach(row => {
+                    if (placements[row] === correctAnswers[row]) {
+                        correct++;
+                    }
+                });
+                return Math.round((correct / 14) * 100);
+            };
 
-const handleSubmit = async () => {
-    console.log('Submit başladı!'); // TEST
-    
-    const finalScore = calculateScore();
-    const correctCount = Math.round((finalScore / 100) * 14);
-    setScore(finalScore);
-    setSubmitted(true);
+            const handleSubmit = async () => {
+                const finalScore = calculateScore();
+                setScore(finalScore);
+                setSubmitted(true);
 
-    console.log('Skor:', finalScore, 'Doğru:', correctCount); // TEST
-
-    // Google Sheets'e gönder
-    const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzut8oPjDoMysYym3t0YL09OJVsxNNixMf0h4QesNIx09iysorjE85y0k16UDAuiC3c/exec';
-    
-    console.log('Google Sheets\'e gönderiliyor...'); // TEST
-    
-    try {
-        const response = await fetch(GOOGLE_SCRIPT_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                nickname: nickname,
-                score: finalScore,
-                correctAnswers: correctCount,
-                timestamp: new Date().toISOString()
-            })
-        });
-        
-        console.log('Google Sheets yanıtı:', response); // TEST
-        console.log('Google Sheets\'e kaydedildi!');
-    } catch (error) {
-        console.error('Google Sheets HATASI:', error); // TEST
-    }
-
-    // LocalStorage'a da kaydet (leaderboard için)
-    try {
-        const scoreData = {
-            nickname: nickname,
-            score: finalScore,
-            timestamp: new Date().toISOString()
-        };
-        const key = `score:${Date.now()}_${nickname.replace(/\s/g, '_')}`;
-        await window.storage.set(key, JSON.stringify(scoreData), true);
-        await loadLeaderboard();
-    } catch (error) {
-        console.log('LocalStorage kaydı başarısız');
-    }
-};
+                try {
+                    const scoreData = {
+                        nickname: nickname,
+                        score: finalScore,
+                        timestamp: new Date().toISOString()
+                    };
+                    const key = `score:${Date.now()}_${nickname.replace(/\s/g, '_')}`;
+                    await window.storage.set(key, JSON.stringify(scoreData), true);
+                    await loadLeaderboard();
+                } catch (error) {
+                    console.log('Skor kaydedilemedi');
+                }
+            };
 
             const resetGame = () => {
                 setPlacements({});
@@ -276,10 +225,191 @@ const handleSubmit = async () => {
                 setNickname('');
             };
 
+            const handleAdminLogin = () => {
+                if (adminPassword === ADMIN_PASSWORD) {
+                    setIsAdminLoggedIn(true);
+                    loadLeaderboard();
+                } else {
+                    alert('Yanlış şifre!');
+                }
+            };
+
+            const clearAllScores = async () => {
+                if (window.confirm('Tüm skorları silmek istediğinden emin misin?')) {
+                    try {
+                        const result = await window.storage.list('shared_score:', true);
+                        if (result && result.keys) {
+                            for (const key of result.keys) {
+                                await window.storage.delete(key.replace('shared_', ''), true);
+                            }
+                        }
+                        setLeaderboard([]);
+                        alert('Tüm skorlar silindi!');
+                    } catch (error) {
+                        alert('Skorlar silinemedi!');
+                    }
+                }
+            };
+
+            const getStats = () => {
+                if (leaderboard.length === 0) return null;
+                const total = leaderboard.length;
+                const avgScore = Math.round(leaderboard.reduce((sum, entry) => sum + entry.score, 0) / total);
+                const maxScore = Math.max(...leaderboard.map(e => e.score));
+                const minScore = Math.min(...leaderboard.map(e => e.score));
+                return { total, avgScore, maxScore, minScore };
+            };
+
             const placedItems = Object.values(placements);
             const availableItems = items.filter(item => !placedItems.includes(item));
 
             if (!gameStarted) {
+                // Admin Paneli
+                if (showAdminPanel && !isAdminLoggedIn) {
+                    return (
+                        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4 sm:p-8 flex items-center justify-center">
+                            <div className="bg-white rounded-2xl shadow-2xl p-6 sm:p-12 max-w-md w-full">
+                                <div className="text-center mb-8">
+                                    <h1 className="text-3xl sm:text-4xl font-bold text-slate-800 mb-3">🔐 Admin Paneli</h1>
+                                    <p className="text-slate-600">Giriş yapmak için şifre girin</p>
+                                </div>
+                                
+                                <div className="mb-6">
+                                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                                        Şifre
+                                    </label>
+                                    <input
+                                        type="password"
+                                        value={adminPassword}
+                                        onChange={(e) => setAdminPassword(e.target.value)}
+                                        onKeyPress={(e) => e.key === 'Enter' && handleAdminLogin()}
+                                        placeholder="Şifreyi girin..."
+                                        className="w-full px-4 py-3 border-2 border-slate-300 rounded-lg focus:outline-none focus:border-purple-500 text-lg"
+                                    />
+                                </div>
+                                
+                                <button
+                                    onClick={handleAdminLogin}
+                                    className="w-full bg-purple-600 text-white py-4 rounded-lg font-semibold text-lg hover:bg-purple-700 transition-colors"
+                                >
+                                    Giriş Yap
+                                </button>
+
+                                <button
+                                    onClick={() => setShowAdminPanel(false)}
+                                    className="w-full mt-4 bg-slate-300 text-slate-700 py-3 rounded-lg font-semibold hover:bg-slate-400 transition-colors"
+                                >
+                                    ← Geri Dön
+                                </button>
+                            </div>
+                        </div>
+                    );
+                }
+
+                // Admin Panel - Logged In
+                if (showAdminPanel && isAdminLoggedIn) {
+                    const stats = getStats();
+                    return (
+                        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4 sm:p-8">
+                            <div className="max-w-6xl mx-auto">
+                                <div className="bg-white rounded-2xl shadow-2xl p-6 sm:p-12">
+                                    <div className="flex justify-between items-center mb-8">
+                                        <h1 className="text-3xl sm:text-4xl font-bold text-slate-800">👑 Admin Paneli</h1>
+                                        <button
+                                            onClick={() => {
+                                                setShowAdminPanel(false);
+                                                setIsAdminLoggedIn(false);
+                                                setAdminPassword('');
+                                            }}
+                                            className="px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 transition-colors"
+                                        >
+                                            Çıkış Yap
+                                        </button>
+                                    </div>
+
+                                    {stats && (
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+                                            <div className="bg-blue-100 rounded-lg p-4 text-center">
+                                                <div className="text-3xl font-bold text-blue-600">{stats.total}</div>
+                                                <div className="text-sm text-slate-600">Toplam Oyuncu</div>
+                                            </div>
+                                            <div className="bg-green-100 rounded-lg p-4 text-center">
+                                                <div className="text-3xl font-bold text-green-600">{stats.avgScore}%</div>
+                                                <div className="text-sm text-slate-600">Ortalama Skor</div>
+                                            </div>
+                                            <div className="bg-orange-100 rounded-lg p-4 text-center">
+                                                <div className="text-3xl font-bold text-orange-600">{stats.maxScore}%</div>
+                                                <div className="text-sm text-slate-600">En Yüksek</div>
+                                            </div>
+                                            <div className="bg-red-100 rounded-lg p-4 text-center">
+                                                <div className="text-3xl font-bold text-red-600">{stats.minScore}%</div>
+                                                <div className="text-sm text-slate-600">En Düşük</div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="mb-6">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h2 className="text-xl font-bold text-slate-800">📊 Tüm Skorlar</h2>
+                                            <button
+                                                onClick={clearAllScores}
+                                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+                                            >
+                                                🗑️ Tümünü Sil
+                                            </button>
+                                        </div>
+                                        
+                                        {leaderboard.length > 0 ? (
+                                            <div className="bg-slate-50 rounded-lg p-4 max-h-96 overflow-y-auto">
+                                                <table className="w-full">
+                                                    <thead className="bg-slate-200 sticky top-0">
+                                                        <tr>
+                                                            <th className="p-2 text-left">#</th>
+                                                            <th className="p-2 text-left">İsim</th>
+                                                            <th className="p-2 text-center">Skor</th>
+                                                            <th className="p-2 text-right text-xs">Tarih</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {leaderboard.map((entry, idx) => (
+                                                            <tr key={idx} className="border-b border-slate-200 hover:bg-slate-100">
+                                                                <td className="p-2 font-bold">{idx + 1}</td>
+                                                                <td className="p-2">{entry.nickname}</td>
+                                                                <td className="p-2 text-center">
+                                                                    <span className={`font-bold ${
+                                                                        entry.score >= 90 ? 'text-green-600' :
+                                                                        entry.score >= 70 ? 'text-orange-600' :
+                                                                        'text-red-600'
+                                                                    }`}>
+                                                                        {entry.score}%
+                                                                    </span>
+                                                                </td>
+                                                                <td className="p-2 text-right text-xs text-slate-500">
+                                                                    {new Date(entry.timestamp).toLocaleString('tr-TR', {
+                                                                        day: '2-digit',
+                                                                        month: '2-digit',
+                                                                        hour: '2-digit',
+                                                                        minute: '2-digit'
+                                                                    })}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        ) : (
+                                            <div className="text-center text-slate-500 py-8">
+                                                Henüz kimse oynamadı
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                }
+
+                // Ana Başlangıç Ekranı
                 return (
                     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 p-4 sm:p-8 flex items-center justify-center">
                         <div className="bg-white rounded-2xl shadow-2xl p-6 sm:p-12 max-w-md w-full">
@@ -317,6 +447,13 @@ const handleSubmit = async () => {
                                 🏆 Liderlik Tablosu
                             </button>
 
+                            <button
+                                onClick={() => setShowAdminPanel(true)}
+                                className="w-full mt-4 bg-purple-600 text-white py-3 rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-purple-700 transition-colors"
+                            >
+                                🔐 Admin Paneli
+                            </button>
+
                             {showLeaderboard && leaderboard.length > 0 && (
                                 <div className="mt-6 bg-slate-50 rounded-lg p-4">
                                     <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2">
@@ -340,66 +477,67 @@ const handleSubmit = async () => {
             }
 
             return (
-                <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 p-4 sm:p-8">
+                <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 p-2 sm:p-8">
                     <div className="max-w-7xl mx-auto">
-                        <div className="bg-white rounded-2xl shadow-2xl p-4 sm:p-8">
-                            <div className="flex justify-between items-center mb-6">
+                        <div className="bg-white rounded-2xl shadow-2xl p-3 sm:p-8">
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 sm:mb-6 gap-2">
                                 <div>
-                                    <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Mix & Match!</h1>
-                                    <p className="text-sm sm:text-base text-slate-600">Oyuncu: <span className="font-semibold text-orange-600">{nickname}</span></p>
+                                    <h1 className="text-xl sm:text-3xl font-bold text-slate-800">Mix & Match!</h1>
+                                    <p className="text-xs sm:text-base text-slate-600">Oyuncu: <span className="font-semibold text-orange-600">{nickname}</span></p>
                                 </div>
                                 <button
                                     onClick={resetGame}
-                                    className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 transition-colors text-sm sm:text-base"
+                                    className="flex items-center gap-2 px-3 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 transition-colors text-xs sm:text-base"
                                 >
                                     🔄 Yeni Oyun
                                 </button>
                             </div>
 
                             {submitted && (
-                                <div className="mb-6 p-4 sm:p-6 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl text-white text-center">
+                                <div className="mb-4 sm:mb-6 p-4 sm:p-6 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl text-white text-center">
                                     <h2 className="text-2xl sm:text-3xl font-bold mb-2">Skorun: {score}%</h2>
-                                    <p className="text-base sm:text-lg">14 sorudan {Math.round((score / 100) * 14)} doğru!</p>
+                                    <p className="text-sm sm:text-lg">14 sorudan {Math.round((score / 100) * 14)} doğru!</p>
                                 </div>
                             )}
 
                             {draggedItem && (
-                                <div className="mb-4 p-3 bg-orange-200 border-2 border-orange-500 rounded-lg text-center font-semibold text-orange-800">
-                                    Seçili: {draggedItem} - Bir satıra dokun
+                                <div className="mb-3 p-2 sm:p-3 bg-orange-200 border-2 border-orange-500 rounded-lg text-center font-semibold text-orange-800 text-xs sm:text-base">
+                                    ✋ {draggedItem} - Bir satıra dokun
                                 </div>
                             )}
 
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                <div>
-                                    <h2 className="text-lg sm:text-xl font-bold text-slate-800 mb-4">P&L Satırları</h2>
-                                    <div className="bg-slate-50 rounded-lg p-2 sm:p-4 space-y-2">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-8">
+                                {/* P&L SATIRLARI - Mobilde 55% genişlik */}
+                                <div className="md:col-span-1">
+                                    <h2 className="text-sm sm:text-xl font-bold text-slate-800 mb-2 sm:mb-4">P&L Satırları</h2>
+                                    <div className="bg-slate-50 rounded-lg p-2 space-y-1 sm:space-y-2 items-container">
                                         {[1,2,3,4,5,6,7,8,9,10,11,12,13,14].map(row => (
                                             <div
                                                 key={row}
                                                 onDrop={() => handleDrop(row)}
                                                 onDragOver={handleDragOver}
                                                 onTouchEnd={(e) => handleTouchEnd(e, row)}
-                                                className={`p-3 sm:p-4 rounded-lg border-2 border-dashed min-h-14 sm:min-h-16 flex items-center justify-between transition-all
+                                                className={`p-2 sm:p-4 rounded-lg border-2 border-dashed min-h-12 sm:min-h-16 flex items-center justify-between transition-all
                                                     ${placements[row] ? 'bg-orange-100 border-orange-400' : 'bg-white border-slate-300'}
                                                     ${submitted && placements[row] === correctAnswers[row] ? 'bg-green-100 border-green-500' : ''}
                                                     ${submitted && placements[row] && placements[row] !== correctAnswers[row] ? 'bg-red-100 border-red-500' : ''}
                                                     ${row === 8 ? 'border-red-400 border-4' : ''}
                                                     ${row === 14 ? 'bg-slate-800 text-white border-slate-800' : ''}
-                                                    ${draggedItem && !placements[row] ? 'border-orange-500 bg-orange-50' : ''}
+                                                    ${draggedItem && !placements[row] ? 'border-orange-500 bg-orange-50 scale-105' : ''}
                                                 `}
                                             >
-                                                <div className="flex items-center gap-2 sm:gap-3 flex-1">
-                                                    <span className="font-bold text-base sm:text-lg">{row}</span>
+                                                <div className="flex items-center gap-1 sm:gap-3 flex-1 min-w-0">
+                                                    <span className="font-bold text-sm sm:text-lg flex-shrink-0">{row}</span>
                                                     {placements[row] ? (
-                                                        <span className="font-medium text-sm sm:text-base">{placements[row]}</span>
+                                                        <span className="font-medium text-xs sm:text-base truncate">{placements[row]}</span>
                                                     ) : (
-                                                        <span className="text-slate-400 text-xs sm:text-sm">Buraya sürükle/dokun...</span>
+                                                        <span className="text-slate-400 text-xs sm:text-sm">Dokun...</span>
                                                     )}
                                                 </div>
                                                 {placements[row] && !submitted && (
                                                     <button
                                                         onClick={() => removeItem(row)}
-                                                        className="text-red-500 hover:text-red-700 font-bold text-lg sm:text-xl px-2"
+                                                        className="text-red-500 hover:text-red-700 font-bold text-base sm:text-xl px-1 sm:px-2 flex-shrink-0"
                                                     >
                                                         ✕
                                                     </button>
@@ -409,9 +547,10 @@ const handleSubmit = async () => {
                                     </div>
                                 </div>
 
-                                <div>
-                                    <h2 className="text-lg sm:text-xl font-bold text-slate-800 mb-4">P&L Kalemleri</h2>
-                                    <div className="bg-slate-50 rounded-lg p-2 sm:p-4 space-y-3">
+                                {/* P&L KALEMLERİ - Mobilde 45% genişlik */}
+                                <div className="md:col-span-1">
+                                    <h2 className="text-sm sm:text-xl font-bold text-slate-800 mb-2 sm:mb-4">Kalemler</h2>
+                                    <div className="bg-slate-50 rounded-lg p-2 space-y-2 items-container">
                                         {availableItems.map(item => (
                                             <div
                                                 key={item}
@@ -419,7 +558,7 @@ const handleSubmit = async () => {
                                                 onDragStart={() => handleDragStart(item)}
                                                 onTouchStart={(e) => handleTouchStart(e, item)}
                                                 onTouchMove={handleTouchMove}
-                                                className={`bg-orange-500 text-white p-3 sm:p-4 rounded-lg font-medium text-center shadow-md text-sm sm:text-base
+                                                className={`bg-orange-500 text-white p-2 sm:p-4 rounded-lg font-medium text-center shadow-md text-xs sm:text-base
                                                     ${submitted ? 'opacity-50 cursor-not-allowed' : 'cursor-move hover:bg-orange-600 hover:shadow-lg active:scale-95 transition-all'}
                                                     ${draggedItem === item ? 'dragging ring-4 ring-orange-300' : ''}
                                                 `}
@@ -428,38 +567,38 @@ const handleSubmit = async () => {
                                             </div>
                                         ))}
                                         {availableItems.length === 0 && !submitted && (
-                                            <p className="text-center text-slate-500 py-8 text-sm sm:text-base">Tüm kalemler yerleştirildi! 🎉</p>
+                                            <p className="text-center text-slate-500 py-4 sm:py-8 text-xs sm:text-base">Tümü yerleştirildi! 🎉</p>
                                         )}
                                     </div>
 
                                     {!submitted && Object.keys(placements).length === 14 && (
                                         <button
                                             onClick={handleSubmit}
-                                            className="w-full mt-6 bg-green-600 text-white py-4 rounded-lg font-bold text-lg hover:bg-green-700 shadow-lg transition-all"
+                                            className="w-full mt-4 sm:mt-6 bg-green-600 text-white py-3 sm:py-4 rounded-lg font-bold text-base sm:text-lg hover:bg-green-700 shadow-lg transition-all"
                                         >
-                                            Cevapları Gönder
+                                            Gönder ✓
                                         </button>
                                     )}
                                 </div>
                             </div>
 
                             {submitted && leaderboard.length > 0 && (
-                                <div className="mt-8 bg-slate-50 rounded-xl p-4 sm:p-6">
-                                    <h3 className="text-lg sm:text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                <div className="mt-4 sm:mt-8 bg-slate-50 rounded-xl p-3 sm:p-6">
+                                    <h3 className="text-base sm:text-xl font-bold text-slate-800 mb-3 sm:mb-4 flex items-center gap-2">
                                         🏆 Liderlik Tablosu
                                     </h3>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4">
                                         {leaderboard.map((entry, idx) => (
                                             <div
                                                 key={idx}
-                                                className={`p-3 sm:p-4 rounded-lg flex justify-between items-center
+                                                className={`p-2 sm:p-4 rounded-lg flex justify-between items-center
                                                     ${entry.nickname === nickname ? 'bg-orange-100 border-2 border-orange-500' : 'bg-white'}
                                                 `}
                                             >
-                                                <span className="font-semibold text-slate-700 text-sm sm:text-base">
+                                                <span className="font-semibold text-slate-700 text-xs sm:text-base">
                                                     {idx + 1}. {entry.nickname}
                                                 </span>
-                                                <span className="font-bold text-orange-600 text-base sm:text-lg">{entry.score}%</span>
+                                                <span className="font-bold text-orange-600 text-sm sm:text-lg">{entry.score}%</span>
                                             </div>
                                         ))}
                                     </div>
