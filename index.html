@@ -218,17 +218,22 @@
 };
 
 const handleSubmit = async () => {
+    console.log('Submit başladı!'); // TEST
+    
     const finalScore = calculateScore();
     const correctCount = Math.round((finalScore / 100) * 14);
     setScore(finalScore);
     setSubmitted(true);
 
+    console.log('Skor:', finalScore, 'Doğru:', correctCount); // TEST
+
     // Google Sheets'e gönder
     const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzut8oPjDoMysYym3t0YL09OJVsxNNixMf0h4QesNIx09iysorjE85y0k16UDAuiC3c/exec';
     
+    console.log('Google Sheets\'e gönderiliyor...'); // TEST
+    
     try {
-        // Google Sheets'e kaydet
-        await fetch(GOOGLE_SCRIPT_URL, {
+        const response = await fetch(GOOGLE_SCRIPT_URL, {
             method: 'POST',
             mode: 'no-cors',
             headers: {
@@ -241,9 +246,11 @@ const handleSubmit = async () => {
                 timestamp: new Date().toISOString()
             })
         });
+        
+        console.log('Google Sheets yanıtı:', response); // TEST
         console.log('Google Sheets\'e kaydedildi!');
     } catch (error) {
-        console.log('Google Sheets kaydı başarısız:', error);
+        console.error('Google Sheets HATASI:', error); // TEST
     }
 
     // LocalStorage'a da kaydet (leaderboard için)
@@ -257,7 +264,7 @@ const handleSubmit = async () => {
         await window.storage.set(key, JSON.stringify(scoreData), true);
         await loadLeaderboard();
     } catch (error) {
-        console.log('LocalStorage kaydı başarısık');
+        console.log('LocalStorage kaydı başarısız');
     }
 };
 
