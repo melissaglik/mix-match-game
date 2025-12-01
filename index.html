@@ -8,14 +8,25 @@
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * {
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+        .dragging {
+            opacity: 0.5;
+            transform: scale(0.95);
+        }
+    </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useRef } = React;
 
-        // Storage simulation for standalone HTML
         window.storage = {
             data: {},
             async get(key, shared) {
@@ -50,6 +61,8 @@
             const [score, setScore] = useState(0);
             const [leaderboard, setLeaderboard] = useState([]);
             const [showLeaderboard, setShowLeaderboard] = useState(false);
+            const [touchStartY, setTouchStartY] = useState(null);
+            const [ghostElement, setGhostElement] = useState(null);
 
             const correctAnswers = {
                 1: 'Turnover Gross',
@@ -118,6 +131,7 @@
                 }
             };
 
+            // Desktop drag handlers
             const handleDragStart = (item) => {
                 setDraggedItem(item);
             };
@@ -131,6 +145,27 @@
 
             const handleDragOver = (e) => {
                 e.preventDefault();
+            };
+
+            // Mobile touch handlers
+            const handleTouchStart = (e, item) => {
+                if (submitted) return;
+                e.preventDefault();
+                setDraggedItem(item);
+                setTouchStartY(e.touches[0].clientY);
+            };
+
+            const handleTouchMove = (e) => {
+                if (!draggedItem || submitted) return;
+                e.preventDefault();
+            };
+
+            const handleTouchEnd = (e, rowNumber) => {
+                if (!draggedItem || submitted) return;
+                e.preventDefault();
+                setPlacements({...placements, [rowNumber]: draggedItem});
+                setDraggedItem(null);
+                setTouchStartY(null);
             };
 
             const removeItem = (rowNumber) => {
@@ -183,10 +218,10 @@
 
             if (!gameStarted) {
                 return (
-                    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 p-8 flex items-center justify-center">
-                        <div className="bg-white rounded-2xl shadow-2xl p-12 max-w-md w-full">
+                    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 p-4 sm:p-8 flex items-center justify-center">
+                        <div className="bg-white rounded-2xl shadow-2xl p-6 sm:p-12 max-w-md w-full">
                             <div className="text-center mb-8">
-                                <h1 className="text-4xl font-bold text-slate-800 mb-3">Mix & Match!</h1>
+                                <h1 className="text-3xl sm:text-4xl font-bold text-slate-800 mb-3">Mix & Match!</h1>
                                 <p className="text-slate-600">P&L Kalemlerini Doğru Yere Yerleştir</p>
                             </div>
                             
@@ -242,58 +277,66 @@
             }
 
             return (
-                <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 p-8">
+                <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 p-4 sm:p-8">
                     <div className="max-w-7xl mx-auto">
-                        <div className="bg-white rounded-2xl shadow-2xl p-8">
+                        <div className="bg-white rounded-2xl shadow-2xl p-4 sm:p-8">
                             <div className="flex justify-between items-center mb-6">
                                 <div>
-                                    <h1 className="text-3xl font-bold text-slate-800">Mix & Match!</h1>
-                                    <p className="text-slate-600">Oyuncu: <span className="font-semibold text-orange-600">{nickname}</span></p>
+                                    <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Mix & Match!</h1>
+                                    <p className="text-sm sm:text-base text-slate-600">Oyuncu: <span className="font-semibold text-orange-600">{nickname}</span></p>
                                 </div>
                                 <button
                                     onClick={resetGame}
-                                    className="flex items-center gap-2 px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 transition-colors"
+                                    className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 transition-colors text-sm sm:text-base"
                                 >
                                     🔄 Yeni Oyun
                                 </button>
                             </div>
 
                             {submitted && (
-                                <div className="mb-6 p-6 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl text-white text-center">
-                                    <h2 className="text-3xl font-bold mb-2">Skorun: {score}%</h2>
-                                    <p className="text-lg">14 sorudan {Math.round((score / 100) * 14)} doğru!</p>
+                                <div className="mb-6 p-4 sm:p-6 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl text-white text-center">
+                                    <h2 className="text-2xl sm:text-3xl font-bold mb-2">Skorun: {score}%</h2>
+                                    <p className="text-base sm:text-lg">14 sorudan {Math.round((score / 100) * 14)} doğru!</p>
+                                </div>
+                            )}
+
+                            {draggedItem && (
+                                <div className="mb-4 p-3 bg-orange-200 border-2 border-orange-500 rounded-lg text-center font-semibold text-orange-800">
+                                    Seçili: {draggedItem} - Bir satıra dokun
                                 </div>
                             )}
 
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                                 <div>
-                                    <h2 className="text-xl font-bold text-slate-800 mb-4">P&L Satırları</h2>
-                                    <div className="bg-slate-50 rounded-lg p-4 space-y-2">
+                                    <h2 className="text-lg sm:text-xl font-bold text-slate-800 mb-4">P&L Satırları</h2>
+                                    <div className="bg-slate-50 rounded-lg p-2 sm:p-4 space-y-2">
                                         {[1,2,3,4,5,6,7,8,9,10,11,12,13,14].map(row => (
                                             <div
                                                 key={row}
                                                 onDrop={() => handleDrop(row)}
                                                 onDragOver={handleDragOver}
-                                                className={`p-4 rounded-lg border-2 border-dashed min-h-16 flex items-center justify-between transition-all
+                                                onTouchEnd={(e) => handleTouchEnd(e, row)}
+                                                className={`p-3 sm:p-4 rounded-lg border-2 border-dashed min-h-14 sm:min-h-16 flex items-center justify-between transition-all
                                                     ${placements[row] ? 'bg-orange-100 border-orange-400' : 'bg-white border-slate-300'}
                                                     ${submitted && placements[row] === correctAnswers[row] ? 'bg-green-100 border-green-500' : ''}
                                                     ${submitted && placements[row] && placements[row] !== correctAnswers[row] ? 'bg-red-100 border-red-500' : ''}
                                                     ${row === 8 ? 'border-red-400 border-4' : ''}
                                                     ${row === 14 ? 'bg-slate-800 text-white border-slate-800' : ''}
+                                                    ${draggedItem && !placements[row] ? 'border-orange-500 bg-orange-50' : ''}
                                                 `}
                                             >
-                                                <div className="flex items-center gap-3 flex-1">
-                                                    <span className="font-bold text-lg">{row}</span>
+                                                <div className="flex items-center gap-2 sm:gap-3 flex-1">
+                                                    <span className="font-bold text-base sm:text-lg">{row}</span>
                                                     {placements[row] ? (
-                                                        <span className="font-medium">{placements[row]}</span>
+                                                        <span className="font-medium text-sm sm:text-base">{placements[row]}</span>
                                                     ) : (
-                                                        <span className="text-slate-400 text-sm">Buraya sürükle...</span>
+                                                        <span className="text-slate-400 text-xs sm:text-sm">Buraya sürükle/dokun...</span>
                                                     )}
                                                 </div>
                                                 {placements[row] && !submitted && (
                                                     <button
                                                         onClick={() => removeItem(row)}
-                                                        className="text-red-500 hover:text-red-700 font-bold"
+                                                        className="text-red-500 hover:text-red-700 font-bold text-lg sm:text-xl px-2"
                                                     >
                                                         ✕
                                                     </button>
@@ -304,22 +347,25 @@
                                 </div>
 
                                 <div>
-                                    <h2 className="text-xl font-bold text-slate-800 mb-4">P&L Kalemleri</h2>
-                                    <div className="bg-slate-50 rounded-lg p-4 space-y-3">
+                                    <h2 className="text-lg sm:text-xl font-bold text-slate-800 mb-4">P&L Kalemleri</h2>
+                                    <div className="bg-slate-50 rounded-lg p-2 sm:p-4 space-y-3">
                                         {availableItems.map(item => (
                                             <div
                                                 key={item}
                                                 draggable={!submitted}
                                                 onDragStart={() => handleDragStart(item)}
-                                                className={`bg-orange-500 text-white p-4 rounded-lg font-medium text-center shadow-md
-                                                    ${submitted ? 'opacity-50 cursor-not-allowed' : 'cursor-move hover:bg-orange-600 hover:shadow-lg transition-all'}
+                                                onTouchStart={(e) => handleTouchStart(e, item)}
+                                                onTouchMove={handleTouchMove}
+                                                className={`bg-orange-500 text-white p-3 sm:p-4 rounded-lg font-medium text-center shadow-md text-sm sm:text-base
+                                                    ${submitted ? 'opacity-50 cursor-not-allowed' : 'cursor-move hover:bg-orange-600 hover:shadow-lg active:scale-95 transition-all'}
+                                                    ${draggedItem === item ? 'dragging ring-4 ring-orange-300' : ''}
                                                 `}
                                             >
                                                 {item}
                                             </div>
                                         ))}
                                         {availableItems.length === 0 && !submitted && (
-                                            <p className="text-center text-slate-500 py-8">Tüm kalemler yerleştirildi! 🎉</p>
+                                            <p className="text-center text-slate-500 py-8 text-sm sm:text-base">Tüm kalemler yerleştirildi! 🎉</p>
                                         )}
                                     </div>
 
@@ -335,22 +381,22 @@
                             </div>
 
                             {submitted && leaderboard.length > 0 && (
-                                <div className="mt-8 bg-slate-50 rounded-xl p-6">
-                                    <h3 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                <div className="mt-8 bg-slate-50 rounded-xl p-4 sm:p-6">
+                                    <h3 className="text-lg sm:text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
                                         🏆 Liderlik Tablosu
                                     </h3>
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         {leaderboard.map((entry, idx) => (
                                             <div
                                                 key={idx}
-                                                className={`p-4 rounded-lg flex justify-between items-center
+                                                className={`p-3 sm:p-4 rounded-lg flex justify-between items-center
                                                     ${entry.nickname === nickname ? 'bg-orange-100 border-2 border-orange-500' : 'bg-white'}
                                                 `}
                                             >
-                                                <span className="font-semibold text-slate-700">
+                                                <span className="font-semibold text-slate-700 text-sm sm:text-base">
                                                     {idx + 1}. {entry.nickname}
                                                 </span>
-                                                <span className="font-bold text-orange-600 text-lg">{entry.score}%</span>
+                                                <span className="font-bold text-orange-600 text-base sm:text-lg">{entry.score}%</span>
                                             </div>
                                         ))}
                                     </div>
