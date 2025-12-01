@@ -217,24 +217,49 @@
     return Math.round((correct / 14) * 100);
 };
 
-            const handleSubmit = async () => {
-                const finalScore = calculateScore();
-                setScore(finalScore);
-                setSubmitted(true);
+const handleSubmit = async () => {
+    const finalScore = calculateScore();
+    const correctCount = Math.round((finalScore / 100) * 14);
+    setScore(finalScore);
+    setSubmitted(true);
 
-                try {
-                    const scoreData = {
-                        nickname: nickname,
-                        score: finalScore,
-                        timestamp: new Date().toISOString()
-                    };
-                    const key = `score:${Date.now()}_${nickname.replace(/\s/g, '_')}`;
-                    await window.storage.set(key, JSON.stringify(scoreData), true);
-                    await loadLeaderboard();
-                } catch (error) {
-                    console.log('Skor kaydedilemedi');
-                }
-            };
+    // Google Sheets'e gönder
+    const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzut8oPjDoMysYym3t0YL09OJVsxNNixMf0h4QesNIx09iysorjE85y0k16UDAuiC3c/exec';
+    
+    try {
+        // Google Sheets'e kaydet
+        await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                nickname: nickname,
+                score: finalScore,
+                correctAnswers: correctCount,
+                timestamp: new Date().toISOString()
+            })
+        });
+        console.log('Google Sheets\'e kaydedildi!');
+    } catch (error) {
+        console.log('Google Sheets kaydı başarısız:', error);
+    }
+
+    // LocalStorage'a da kaydet (leaderboard için)
+    try {
+        const scoreData = {
+            nickname: nickname,
+            score: finalScore,
+            timestamp: new Date().toISOString()
+        };
+        const key = `score:${Date.now()}_${nickname.replace(/\s/g, '_')}`;
+        await window.storage.set(key, JSON.stringify(scoreData), true);
+        await loadLeaderboard();
+    } catch (error) {
+        console.log('LocalStorage kaydı başarısık');
+    }
+};
 
             const resetGame = () => {
                 setPlacements({});
