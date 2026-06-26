@@ -1,477 +1,494 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mix & Match - P&L Oyunu</title>
-    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        * {
-            -webkit-user-select: none;
-            -moz-user-select: none;
-            -ms-user-select: none;
-            user-select: none;
-        }
-        .dragging {
-            opacity: 0.5;
-            transform: scale(0.95);
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mix & Match - P&L Items</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lucide-static/0.383.0/umd/lucide.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  #root { min-height: 100vh; }
+  .icon { display: inline-flex; vertical-align: middle; }
+</style>
 </head>
 <body>
-    <div id="root"></div>
+<div id="root"></div>
 
-    <script type="text/babel">
-        const { useState, useEffect, useRef } = React;
+<script type="text/babel">
+const { useState } = React;
 
-        window.storage = {
-            data: {},
-            async get(key, shared) {
-                const storageKey = shared ? `shared_${key}` : key;
-                const item = localStorage.getItem(storageKey);
-                return item ? { key, value: item, shared } : null;
-            },
-            async set(key, value, shared) {
-                const storageKey = shared ? `shared_${key}` : key;
-                localStorage.setItem(storageKey, value);
-                return { key, value, shared };
-            },
-            async list(prefix, shared) {
-                const keys = [];
-                const storagePrefix = shared ? `shared_${prefix || ''}` : (prefix || '');
-                for (let i = 0; i < localStorage.length; i++) {
-                    const key = localStorage.key(i);
-                    if (key.startsWith(storagePrefix)) {
-                        keys.push(key);
-                    }
-                }
-                return { keys, prefix, shared };
-            }
-        };
+// Basit ikon bileşenleri (lucide yerine emoji/svg kullanıyoruz, dış bağımlılık olmasın)
+const TrophyIcon = ({size=24}) => <span style={{fontSize: size}}>🏆</span>;
+const AwardIcon = ({size=24}) => <span style={{fontSize: size}}>🥇</span>;
+const PlayIcon = ({size=20}) => <span style={{fontSize: size}}>▶️</span>;
+const CheckIcon = ({size=18}) => <span style={{fontSize: size, color:'#16a34a'}}>✓</span>;
+const XIcon = ({size=18}) => <span style={{fontSize: size, color:'#dc2626'}}>✕</span>;
+const RotateIcon = ({size=18}) => <span style={{fontSize: size}}>🔄</span>;
+const ArrowIcon = ({size=16}) => <span style={{fontSize: size}}>👉</span>;
 
-        const MixMatchGame = () => {
-            const [gameStarted, setGameStarted] = useState(false);
-            const [nickname, setNickname] = useState('');
-            const [draggedItem, setDraggedItem] = useState(null);
-            const [placements, setPlacements] = useState({});
-            const [submitted, setSubmitted] = useState(false);
-            const [score, setScore] = useState(0);
-            const [leaderboard, setLeaderboard] = useState([]);
-            const [showLeaderboard, setShowLeaderboard] = useState(false);
-            const [touchStartY, setTouchStartY] = useState(null);
-            const [ghostElement, setGhostElement] = useState(null);
+// ============ GOOGLE SHEETS WEB APP URL'NİZİ BURAYA YAZIN ============
+const GOOGLE_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbwVqE_bAqDr7FBZn5zNz0tNVJAi1YXy5PxkKF6Yw15ueP5bqmwVl29Jyx2u5_dPMhY/exec';
+// =======================================================================
 
-            const correctAnswers = {
-                1: 'Sales Quantity',
-                2: 'Turnover Gross',
-                3: 'Sales Deductions',
-                4: 'Turnover Net',
-                5: 'Var. Factory Costs',
-                6: 'Var. Costs Sales',
-                7: 'Var. Cost Logistic',
-                8: 'Contribution Margin I',
-                9: 'Fixed Factory Costs',
-                10: 'SG&A local regional',
-                11: 'Development',
-                12: 'SG&A Global',
-                13: 'Due Date Effects',
-                14: 'EBIT'
-            };
+const correctAnswers = {
+  1: 'Sales Quantity',
+  2: 'Turnover Gross',
+  3: 'Sales Deductions',
+  4: 'Turnover Net',
+  5: 'Var. Factory Costs',
+  6: 'Var. Costs Sales',
+  7: 'Var. Cost Logistic',
+  8: 'Contribution Margin I',
+  9: 'Fixed Factory Costs',
+  10: 'SG&A local regional',
+  11: 'Development',
+  12: 'SG&A Global',
+  13: 'Due Date Effects',
+  14: 'EBIT'
+};
 
-            const items = [
-                'SG&A Global',
-                'Sales Deductions',
-                'Var. Cost Logistic',
-                'Sales Quantity',
-                'EBIT',
-                'Turnover Net',
-                'Development',
-                'Contribution Margin I',
-                'Fixed Factory Costs',
-                'Due Date Effects',
-                'Var. Factory Costs',
-                'SG&A local regional',
-                'Turnover Gross',
-                'Var. Costs Sales'
-            ];
+const allItems = Object.values(correctAnswers);
 
-            useEffect(() => {
-                loadLeaderboard();
-            }, []);
+function PLMatchGame() {
+  const [gameStarted, setGameStarted] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [leaderboardData, setLeaderboardData] = useState([]);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+  const [nickname, setNickname] = useState('');
+  const [shuffledItems, setShuffledItems] = useState([]);
+  const [currentItemIndex, setCurrentItemIndex] = useState(0);
+  const [userAnswers, setUserAnswers] = useState({});
+  const [gameFinished, setGameFinished] = useState(false);
+  const [score, setScore] = useState(0);
+  const [correctCount, setCorrectCount] = useState(0);
 
-            const loadLeaderboard = async () => {
-                try {
-                    const result = await window.storage.list('shared_score:', true);
-                    if (result && result.keys) {
-                        const scores = await Promise.all(
-                            result.keys.map(async (key) => {
-                                try {
-                                    const data = await window.storage.get(key.replace('shared_', ''), true);
-                                    return data ? JSON.parse(data.value) : null;
-                                } catch {
-                                    return null;
-                                }
-                            })
-                        );
-                        const validScores = scores.filter(s => s !== null);
-                        validScores.sort((a, b) => b.score - a.score);
-                        setLeaderboard(validScores.slice(0, 10));
-                    }
-                } catch (error) {
-                    console.log('Liderlik tablosu yüklenemedi');
-                }
-            };
+  const fetchLeaderboard = async () => {
+    setLeaderboardLoading(true);
+    try {
+      const response = await fetch(GOOGLE_SHEETS_URL);
+      const data = await response.json();
+      const sorted = (Array.isArray(data) ? data : []).sort((a, b) => b.score - a.score).slice(0, 10);
+      setLeaderboardData(sorted);
+    } catch (error) {
+      console.log('Leaderboard yüklenemedi:', error);
+      setLeaderboardData([]);
+    }
+    setLeaderboardLoading(false);
+  };
 
-            const startGame = () => {
-                if (nickname.trim()) {
-                    setGameStarted(true);
-                }
-            };
+  const handleStartGame = () => {
+    if (nickname.trim()) {
+      setGameStarted(true);
+      shuffleItems();
+    }
+  };
 
-            // Desktop drag handlers
-            const handleDragStart = (item) => {
-                setDraggedItem(item);
-            };
+  const shuffleItems = () => {
+    const shuffled = [...allItems].sort(() => Math.random() - 0.5);
+    setShuffledItems(shuffled);
+    setCurrentItemIndex(0);
+    setUserAnswers({});
+    setGameFinished(false);
+    setScore(0);
+    setCorrectCount(0);
+  };
 
-            const handleDrop = (rowNumber) => {
-                if (draggedItem && !submitted) {
-                    setPlacements({...placements, [rowNumber]: draggedItem});
-                    setDraggedItem(null);
-                }
-            };
+  const handleSlotClick = (slotNumber) => {
+    if (gameFinished || userAnswers[slotNumber] || currentItemIndex >= shuffledItems.length) return;
+    const currentItem = shuffledItems[currentItemIndex];
+    const newAnswers = { ...userAnswers, [slotNumber]: currentItem };
+    setUserAnswers(newAnswers);
+    if (currentItemIndex < shuffledItems.length - 1) {
+      setCurrentItemIndex(currentItemIndex + 1);
+    } else {
+      calculateScore(newAnswers);
+    }
+  };
 
-            const handleDragOver = (e) => {
-                e.preventDefault();
-            };
-
-            // Mobile touch handlers
-            const handleTouchStart = (e, item) => {
-                if (submitted) return;
-                e.preventDefault();
-                setDraggedItem(item);
-                setTouchStartY(e.touches[0].clientY);
-            };
-
-            const handleTouchMove = (e) => {
-                if (!draggedItem || submitted) return;
-                e.preventDefault();
-            };
-
-            const handleTouchEnd = (e, rowNumber) => {
-                if (!draggedItem || submitted) return;
-                e.preventDefault();
-                setPlacements({...placements, [rowNumber]: draggedItem});
-                setDraggedItem(null);
-                setTouchStartY(null);
-            };
-
-            const removeItem = (rowNumber) => {
-                if (!submitted) {
-                    const newPlacements = {...placements};
-                    delete newPlacements[rowNumber];
-                    setPlacements(newPlacements);
-                }
-            };
-
-            const calculateScore = () => {
+  const calculateScore = (answers) => {
     let correct = 0;
-    
-    // Esnek gruplar: bu pozisyonlarda sıralama önemli değil
-    const flexibleGroups = [
-        [2, 3],           // Turnover Gross, Sales Deductions
-        [5, 6, 7],        // Var. Factory Costs, Var. Costs Sales, Var. Cost Logistic
-        [9, 10, 11, 12, 13]  // Fixed Factory Costs, SG&A local regional, Development, SG&A Global, Due Date Effects
-    ];
-    
-    const checkedPositions = new Set();
-    
-    // Esnek grupları kontrol et
-    flexibleGroups.forEach(group => {
-        const groupAnswers = group.map(pos => correctAnswers[pos]);
-        const groupPlacements = group.map(pos => placements[pos]);
-        
-        // Gruptaki her doğru cevap için
-        groupAnswers.forEach(answer => {
-            if (groupPlacements.includes(answer)) {
-                correct++;
-            }
-        });
-        
-        // Bu pozisyonları işaretledik
-        group.forEach(pos => checkedPositions.add(pos));
-    });
-    
-    // Sabit pozisyonları kontrol et (1, 4, 8, 14)
-    Object.keys(correctAnswers).forEach(row => {
-        const rowNum = parseInt(row);
-        if (!checkedPositions.has(rowNum)) {
-            if (placements[row] === correctAnswers[row]) {
-                correct++;
-            }
-        }
-    });
-    
-    return Math.round((correct / 14) * 100);
-};
-
-const handleSubmit = async () => {
-    console.log('Submit başladı!'); // TEST
-    
-    const finalScore = calculateScore();
-    const correctCount = Math.round((finalScore / 100) * 14);
+    for (let i = 1; i <= 14; i++) {
+      if (answers[i] === correctAnswers[i]) correct++;
+    }
+    const finalScore = Math.round((correct / 14) * 100);
+    setCorrectCount(correct);
     setScore(finalScore);
-    setSubmitted(true);
+    setGameFinished(true);
+    saveToGoogleSheets(correct, finalScore);
+  };
 
-    console.log('Skor:', finalScore, 'Doğru:', correctCount); // TEST
-
-    // Google Sheets'e gönder
-    const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzut8oPjDoMysYym3t0YL09OJVsxNNixMf0h4QesNIx09iysorjE85y0k16UDAuiC3c/exec';
-    
-    console.log('Google Sheets\'e gönderiliyor...'); // TEST
-    
+  const saveToGoogleSheets = async (correct, scoreValue) => {
     try {
-        const response = await fetch(GOOGLE_SCRIPT_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                nickname: nickname,
-                score: finalScore,
-                correctAnswers: correctCount,
-                timestamp: new Date().toISOString()
-            })
-        });
-        
-        console.log('Google Sheets yanıtı:', response); // TEST
-        console.log('Google Sheets\'e kaydedildi!');
+      await fetch(GOOGLE_SHEETS_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          timestamp: new Date().toISOString(),
+          nickname: nickname,
+          correctAnswers: correct,
+          score: scoreValue,
+          totalQuestions: 14
+        })
+      });
     } catch (error) {
-        console.error('Google Sheets HATASI:', error); // TEST
+      console.log('Google Sheets kaydedilemedi:', error);
     }
+  };
 
-    // LocalStorage'a da kaydet (leaderboard için)
-    try {
-        const scoreData = {
-            nickname: nickname,
-            score: finalScore,
-            timestamp: new Date().toISOString()
-        };
-        const key = `score:${Date.now()}_${nickname.replace(/\s/g, '_')}`;
-        await window.storage.set(key, JSON.stringify(scoreData), true);
-        await loadLeaderboard();
-    } catch (error) {
-        console.log('LocalStorage kaydı başarısız');
+  const isCorrect = (slotNumber) => {
+    if (!gameFinished || !userAnswers[slotNumber]) return null;
+    return userAnswers[slotNumber] === correctAnswers[slotNumber];
+  };
+
+  const getSlotStyle = (slotNum) => {
+    if (userAnswers[slotNum] && gameFinished) {
+      return isCorrect(slotNum)
+        ? { background: '#bbf7d0' }
+        : { background: '#fecaca' };
     }
-};
+    if (userAnswers[slotNum]) {
+      const colors = {
+        1: '#e2e8f0', 2: '#cbd5e1', 3: '#94a3b8', 4: '#94a3b8',
+        5: '#fed7aa', 6: '#fdba74', 7: '#fb923c', 8: '#ea580c',
+        9: '#cbd5e1', 10: '#94a3b8', 11: '#64748b', 12: '#475569',
+        13: '#334155', 14: '#000000'
+      };
+      return { background: colors[slotNum] };
+    }
+    return { background: '#f1f5f9', border: '2px dashed #cbd5e1' };
+  };
 
-            const resetGame = () => {
-                setPlacements({});
-                setSubmitted(false);
-                setScore(0);
-                setGameStarted(false);
-                setNickname('');
-            };
+  const getTextColor = (slotNum) => {
+    if ([8, 11, 12, 13, 14].includes(slotNum)) return '#ffffff';
+    return '#1f2937';
+  };
 
-            const placedItems = Object.values(placements);
-            const availableItems = items.filter(item => !placedItems.includes(item));
+  const currentItem = shuffledItems[currentItemIndex];
 
-            if (!gameStarted) {
-                return (
-                    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 p-4 sm:p-8 flex items-center justify-center">
-                        <div className="bg-white rounded-2xl shadow-2xl p-6 sm:p-12 max-w-md w-full">
-                            <div className="text-center mb-8">
-                                <h1 className="text-3xl sm:text-4xl font-bold text-slate-800 mb-3">Mix & Match!</h1>
-                                <p className="text-slate-600">P&L Kalemlerini Doğru Yere Yerleştir</p>
-                            </div>
-                            
-                            <div className="mb-6">
-                                <label className="block text-sm font-medium text-slate-700 mb-2">
-                                    Nickname
-                                </label>
-                                <input
-                                    type="text"
-                                    value={nickname}
-                                    onChange={(e) => setNickname(e.target.value)}
-                                    onKeyPress={(e) => e.key === 'Enter' && startGame()}
-                                    placeholder="İsmini gir..."
-                                    className="w-full px-4 py-3 border-2 border-slate-300 rounded-lg focus:outline-none focus:border-orange-500 text-lg"
-                                />
-                            </div>
-                            
-                            <button
-                                onClick={startGame}
-                                disabled={!nickname.trim()}
-                                className="w-full bg-orange-500 text-white py-4 rounded-lg font-semibold text-lg hover:bg-orange-600 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
-                            >
-                                Oyuna Başla
-                            </button>
+  // ============ GİRİŞ EKRANI ============
+  if (!gameStarted) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #3b82f6, #a855f7, #ec4899)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px'
+      }}>
+        <div style={{
+          background: 'white',
+          borderRadius: '20px',
+          boxShadow: '0 25px 50px -12px rgba(0,0,0,0.4)',
+          padding: '40px 32px',
+          maxWidth: '420px',
+          width: '100%'
+        }}>
+          {/* BSH Logo */}
+          <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+            <div style={{ fontSize: '36px', fontWeight: 'bold', display: 'inline-flex', gap: '4px' }}>
+              <span style={{ color: '#1e40af' }}>B</span>
+              <span style={{ color: '#9ca3af' }}>/</span>
+              <span style={{ color: '#dc2626' }}>S</span>
+              <span style={{ color: '#9ca3af' }}>/</span>
+              <span style={{ color: '#16a34a' }}>H</span>
+            </div>
+          </div>
 
-                            <button
-                                onClick={() => {loadLeaderboard(); setShowLeaderboard(true);}}
-                                className="w-full mt-4 bg-slate-700 text-white py-3 rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-slate-600 transition-colors"
-                            >
-                                🏆 Liderlik Tablosu
-                            </button>
+          <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+            <div style={{
+              display: 'inline-block',
+              background: 'linear-gradient(135deg, #fb923c, #ea580c)',
+              borderRadius: '50%',
+              padding: '16px',
+              marginBottom: '16px'
+            }}>
+              <TrophyIcon size={48} />
+            </div>
+            <h1 style={{ fontSize: '28px', fontWeight: 'bold', color: '#1e293b', marginBottom: '4px' }}>
+              Mix & Match
+            </h1>
+            <p style={{ color: '#64748b', fontSize: '15px' }}>P&L Items</p>
+          </div>
 
-                            {showLeaderboard && leaderboard.length > 0 && (
-                                <div className="mt-6 bg-slate-50 rounded-lg p-4">
-                                    <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2">
-                                        🏆 Top 10
-                                    </h3>
-                                    <div className="space-y-2">
-                                        {leaderboard.map((entry, idx) => (
-                                            <div key={idx} className="flex justify-between items-center text-sm">
-                                                <span className="text-slate-700">
-                                                    {idx + 1}. {entry.nickname}
-                                                </span>
-                                                <span className="font-bold text-orange-600">{entry.score}%</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+                Nickname
+              </label>
+              <input
+                type="text"
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleStartGame()}
+                placeholder="İsmini gir..."
+                maxLength={20}
+                autoFocus
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  border: '2px solid #e2e8f0',
+                  borderRadius: '10px',
+                  fontSize: '15px',
+                  outline: 'none',
+                  color: '#1f2937'
+                }}
+              />
+            </div>
+
+            <button
+              onClick={handleStartGame}
+              disabled={!nickname.trim()}
+              style={{
+                width: '100%',
+                padding: '14px',
+                borderRadius: '10px',
+                fontWeight: '600',
+                color: 'white',
+                border: 'none',
+                cursor: nickname.trim() ? 'pointer' : 'not-allowed',
+                background: nickname.trim()
+                  ? 'linear-gradient(135deg, #fb923c, #ea580c)'
+                  : '#cbd5e1',
+                fontSize: '15px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                boxShadow: nickname.trim() ? '0 10px 20px -5px rgba(234,88,12,0.4)' : 'none'
+              }}
+            >
+              <PlayIcon size={20} /> Oyuna Başla
+            </button>
+
+            <button
+              onClick={() => {
+                setShowLeaderboard(!showLeaderboard);
+                if (!showLeaderboard) fetchLeaderboard();
+              }}
+              style={{
+                width: '100%',
+                padding: '14px',
+                borderRadius: '10px',
+                fontWeight: '600',
+                color: '#374151',
+                background: '#f1f5f9',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: '15px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
+              }}
+            >
+              <AwardIcon size={20} /> Skor Tablosu
+            </button>
+          </div>
+
+          {showLeaderboard && (
+            <div style={{
+              marginTop: '20px',
+              background: '#f8fafc',
+              borderRadius: '10px',
+              padding: '16px',
+              maxHeight: '260px',
+              overflowY: 'auto'
+            }}>
+              <h3 style={{ textAlign: 'center', fontWeight: 'bold', color: '#1e293b', marginBottom: '12px' }}>
+                🏆 Top 10
+              </h3>
+              {leaderboardLoading ? (
+                <p style={{ textAlign: 'center', color: '#64748b', fontSize: '14px' }}>Yükleniyor...</p>
+              ) : leaderboardData.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {leaderboardData.map((entry, index) => (
+                    <div key={index} style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      background: 'white',
+                      borderRadius: '8px',
+                      padding: '8px 12px',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{
+                          fontWeight: 'bold',
+                          fontSize: '13px',
+                          width: '24px',
+                          height: '24px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          borderRadius: '50%',
+                          color: 'white',
+                          background: index === 0 ? '#facc15' : index === 1 ? '#cbd5e1' : index === 2 ? '#fb923c' : '#94a3b8'
+                        }}>{index + 1}</span>
+                        <span style={{ fontWeight: '500', color: '#374151' }}>{entry.nickname}</span>
+                      </div>
+                      <span style={{ fontWeight: 'bold', color: '#ea580c' }}>{entry.score}</span>
                     </div>
-                );
-            }
-
-            return (
-                <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 p-4 sm:p-8">
-                    <div className="max-w-7xl mx-auto">
-                        <div className="bg-white rounded-2xl shadow-2xl p-4 sm:p-8">
-                            <div className="flex justify-between items-center mb-6">
-                                <div>
-                                    <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Mix & Match!</h1>
-                                    <p className="text-sm sm:text-base text-slate-600">Oyuncu: <span className="font-semibold text-orange-600">{nickname}</span></p>
-                                </div>
-                                <button
-                                    onClick={resetGame}
-                                    className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 transition-colors text-sm sm:text-base"
-                                >
-                                    🔄 Yeni Oyun
-                                </button>
-                            </div>
-
-                            {submitted && (
-                                <div className="mb-6 p-4 sm:p-6 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl text-white text-center">
-                                    <h2 className="text-2xl sm:text-3xl font-bold mb-2">Skorun: {score}%</h2>
-                                    <p className="text-base sm:text-lg">14 sorudan {Math.round((score / 100) * 14)} doğru!</p>
-                                </div>
-                            )}
-
-                            {draggedItem && (
-                                <div className="mb-4 p-3 bg-orange-200 border-2 border-orange-500 rounded-lg text-center font-semibold text-orange-800">
-                                    Seçili: {draggedItem} - Bir satıra dokun
-                                </div>
-                            )}
-
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                <div>
-                                    <h2 className="text-lg sm:text-xl font-bold text-slate-800 mb-4">P&L Satırları</h2>
-                                    <div className="bg-slate-50 rounded-lg p-2 sm:p-4 space-y-2">
-                                        {[1,2,3,4,5,6,7,8,9,10,11,12,13,14].map(row => (
-                                            <div
-                                                key={row}
-                                                onDrop={() => handleDrop(row)}
-                                                onDragOver={handleDragOver}
-                                                onTouchEnd={(e) => handleTouchEnd(e, row)}
-                                                className={`p-3 sm:p-4 rounded-lg border-2 border-dashed min-h-14 sm:min-h-16 flex items-center justify-between transition-all
-                                                    ${placements[row] ? 'bg-orange-100 border-orange-400' : 'bg-white border-slate-300'}
-                                                    ${submitted && placements[row] === correctAnswers[row] ? 'bg-green-100 border-green-500' : ''}
-                                                    ${submitted && placements[row] && placements[row] !== correctAnswers[row] ? 'bg-red-100 border-red-500' : ''}
-                                                    ${row === 8 ? 'border-red-400 border-4' : ''}
-                                                    ${row === 14 ? 'bg-slate-800 text-white border-slate-800' : ''}
-                                                    ${draggedItem && !placements[row] ? 'border-orange-500 bg-orange-50' : ''}
-                                                `}
-                                            >
-                                                <div className="flex items-center gap-2 sm:gap-3 flex-1">
-                                                    <span className="font-bold text-base sm:text-lg">{row}</span>
-                                                    {placements[row] ? (
-                                                        <span className="font-medium text-sm sm:text-base">{placements[row]}</span>
-                                                    ) : (
-                                                        <span className="text-slate-400 text-xs sm:text-sm">Buraya sürükle/dokun...</span>
-                                                    )}
-                                                </div>
-                                                {placements[row] && !submitted && (
-                                                    <button
-                                                        onClick={() => removeItem(row)}
-                                                        className="text-red-500 hover:text-red-700 font-bold text-lg sm:text-xl px-2"
-                                                    >
-                                                        ✕
-                                                    </button>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <h2 className="text-lg sm:text-xl font-bold text-slate-800 mb-4">P&L Kalemleri</h2>
-                                    <div className="bg-slate-50 rounded-lg p-2 sm:p-4 space-y-3">
-                                        {availableItems.map(item => (
-                                            <div
-                                                key={item}
-                                                draggable={!submitted}
-                                                onDragStart={() => handleDragStart(item)}
-                                                onTouchStart={(e) => handleTouchStart(e, item)}
-                                                onTouchMove={handleTouchMove}
-                                                className={`bg-orange-500 text-white p-3 sm:p-4 rounded-lg font-medium text-center shadow-md text-sm sm:text-base
-                                                    ${submitted ? 'opacity-50 cursor-not-allowed' : 'cursor-move hover:bg-orange-600 hover:shadow-lg active:scale-95 transition-all'}
-                                                    ${draggedItem === item ? 'dragging ring-4 ring-orange-300' : ''}
-                                                `}
-                                            >
-                                                {item}
-                                            </div>
-                                        ))}
-                                        {availableItems.length === 0 && !submitted && (
-                                            <p className="text-center text-slate-500 py-8 text-sm sm:text-base">Tüm kalemler yerleştirildi! 🎉</p>
-                                        )}
-                                    </div>
-
-                                    {!submitted && Object.keys(placements).length === 14 && (
-                                        <button
-                                            onClick={handleSubmit}
-                                            className="w-full mt-6 bg-green-600 text-white py-4 rounded-lg font-bold text-lg hover:bg-green-700 shadow-lg transition-all"
-                                        >
-                                            Cevapları Gönder
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-
-                            {submitted && leaderboard.length > 0 && (
-                                <div className="mt-8 bg-slate-50 rounded-xl p-4 sm:p-6">
-                                    <h3 className="text-lg sm:text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
-                                        🏆 Liderlik Tablosu
-                                    </h3>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        {leaderboard.map((entry, idx) => (
-                                            <div
-                                                key={idx}
-                                                className={`p-3 sm:p-4 rounded-lg flex justify-between items-center
-                                                    ${entry.nickname === nickname ? 'bg-orange-100 border-2 border-orange-500' : 'bg-white'}
-                                                `}
-                                            >
-                                                <span className="font-semibold text-slate-700 text-sm sm:text-base">
-                                                    {idx + 1}. {entry.nickname}
-                                                </span>
-                                                <span className="font-bold text-orange-600 text-base sm:text-lg">{entry.score}%</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
+                  ))}
                 </div>
-            );
-        };
+              ) : (
+                <p style={{ textAlign: 'center', color: '#64748b', fontSize: '14px' }}>Henüz veri yok</p>
+              )}
+            </div>
+          )}
 
-        ReactDOM.render(<MixMatchGame />, document.getElementById('root'));
-    </script>
+          <div style={{ marginTop: '28px', paddingTop: '20px', borderTop: '1px solid #e2e8f0' }}>
+            <p style={{ fontSize: '12px', color: '#94a3b8', textAlign: 'center' }}>
+              14 P&L item'ını doğru sıraya yerleştir ve skorunu gör!
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ============ OYUN EKRANI ============
+  return (
+    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f8fafc, #f1f5f9)', padding: '12px' }}>
+      <div style={{ maxWidth: '1100px', margin: '0 auto 16px' }}>
+        <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', padding: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+            <div>
+              <h1 style={{ fontSize: '22px', fontWeight: 'bold', color: '#1e293b' }}>
+                Mix & Match! <span style={{ color: '#ea580c', marginLeft: '8px' }}>👋 {nickname}</span>
+              </h1>
+              <p style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>
+                {gameFinished ? 'Oyun Bitti!' : `${Object.keys(userAnswers).length}/14 Tamamlandı`}
+              </p>
+            </div>
+            <button
+              onClick={shuffleItems}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '8px',
+                background: '#3b82f6', color: 'white', border: 'none',
+                padding: '10px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: '500'
+              }}
+            >
+              <RotateIcon size={18} /> Yeni Oyun
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
+        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+
+          {/* SOL TARAF */}
+          <div style={{ flex: '1 1 580px' }}>
+            <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', padding: '16px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                {[1,2,3,4,5,6,7,8,9,10,11,12,13,14].map((num) => (
+                  <div
+                    key={num}
+                    onClick={() => handleSlotClick(num)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '10px',
+                      padding: '10px 12px', borderRadius: '6px',
+                      cursor: userAnswers[num] ? 'default' : (!gameFinished && currentItem ? 'pointer' : 'not-allowed'),
+                      transition: 'all 0.15s',
+                      ...getSlotStyle(num)
+                    }}
+                  >
+                    <div style={{
+                      flexShrink: 0, width: '28px', textAlign: 'center',
+                      fontWeight: 'bold', fontSize: '13px', color: getTextColor(num)
+                    }}>{num}</div>
+                    <div style={{
+                      flex: 1, fontSize: '14px', fontWeight: '500',
+                      color: userAnswers[num] ? getTextColor(num) : 'transparent'
+                    }}>{userAnswers[num] || 'Empty'}</div>
+                    {gameFinished && userAnswers[num] && (
+                      <div style={{ flexShrink: 0 }}>
+                        {isCorrect(num) ? <CheckIcon size={18} /> : <XIcon size={18} />}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* SAĞ TARAF */}
+          <div style={{ flex: '1 1 360px' }}>
+            <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', padding: '16px' }}>
+              {!gameFinished ? (
+                <div>
+                  <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+                    <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '8px' }}>
+                      Item {currentItemIndex + 1} / {shuffledItems.length}
+                    </div>
+                    <div style={{ height: '4px', background: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
+                      <div style={{
+                        height: '100%', background: '#3b82f6', transition: 'width 0.3s',
+                        width: `${(currentItemIndex / shuffledItems.length) * 100}%`
+                      }}></div>
+                    </div>
+                  </div>
+
+                  {currentItem ? (
+                    <div style={{ position: 'relative' }}>
+                      <div style={{
+                        background: 'linear-gradient(135deg, #fb923c, #ea580c)',
+                        borderRadius: '14px', boxShadow: '0 10px 25px -5px rgba(234,88,12,0.4)',
+                        padding: '32px 24px', textAlign: 'center'
+                      }}>
+                        <div style={{ color: 'white', fontSize: '19px', fontWeight: 'bold', marginBottom: '10px' }}>
+                          {currentItem}
+                        </div>
+                        <div style={{ color: 'white', opacity: 0.9, fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                          <ArrowIcon size={16} /> Sol taraftan doğru sırayı seçin
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <p style={{ textAlign: 'center', color: '#94a3b8' }}>Yükleniyor...</p>
+                  )}
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '24px 0' }}>
+                  <TrophyIcon size={64} />
+                  <div style={{
+                    background: 'linear-gradient(135deg, #3b82f6, #a855f7)',
+                    color: 'white', borderRadius: '10px', padding: '24px', margin: '16px 0'
+                  }}>
+                    <div style={{ fontSize: '44px', fontWeight: 'bold' }}>{score}</div>
+                    <div style={{ fontSize: '13px', opacity: 0.9 }}>100 üzerinden skor</div>
+                  </div>
+                  <div style={{ background: '#f8fafc', borderRadius: '10px', padding: '16px' }}>
+                    <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#334155' }}>{correctCount}/14</div>
+                    <div style={{ fontSize: '13px', color: '#64748b' }}>Doğru cevap</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {!gameFinished && currentItem && (
+        <div style={{
+          position: 'fixed', bottom: '16px', left: '50%', transform: 'translateX(-50%)',
+          background: '#3b82f6', color: 'white', padding: '10px 20px',
+          borderRadius: '999px', boxShadow: '0 4px 12px rgba(0,0,0,0.2)', fontSize: '13px', fontWeight: '500'
+        }}>
+          👈 Doğru sırayı tıklayın
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<PLMatchGame />);
+</script>
 </body>
 </html>
